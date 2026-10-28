@@ -77,7 +77,10 @@ test('servidor entrega a interface e bloqueia origens externas', async t => {
   const { url } = await app(t);
   const page = await fetch(url);
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /O ponto de partida/);
+  const html = await page.text();
+  assert.match(html, /Dê a partida/);
+  assert.equal((html.match(/class="panel model-panel"/g) || []).length, 2);
+  assert.doesNotMatch(html, /character-figure|seed-panel/);
   const external = await fetch(`${url}/api/chat`, { method: 'POST', headers: { Origin: 'https://external.example', 'Content-Type': 'application/json' }, body: JSON.stringify(seed) });
   assert.equal(external.status, 403);
   assert.equal((await fetch(`${url}/server.js`)).status, 404);

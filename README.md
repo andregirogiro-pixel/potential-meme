@@ -1,6 +1,6 @@
 # Entre modelos
 
-Uma mensagem sua inicia uma conversa automática entre dois modelos de texto do **OpenRouter**, em três caixas: você, modelo A e modelo B.
+Uma mensagem sua inicia uma conversa automática entre dois modelos de texto do **OpenRouter**, em apenas dois quadros: modelo A e modelo B. O campo **Assunto inicial**, acima dos quadros, serve para dar a partida; você não participa como um terceiro modelo.
 
 ## Executar
 
@@ -13,10 +13,12 @@ npm start
 O servidor usa a porta 3000 (configurável por `PORT`). Para desenvolvimento com reinício automático, execute `npm run dev`.
 
 1. Informe sua chave do OpenRouter no campo da página.
-2. Em cada caixa de seleção, escolha um modelo do catálogo. Para inserir outro, clique no botão **+**, digite o identificador exato (por exemplo `openai/gpt-4o-mini`) e clique em **Adicionar modelo**. Ele entra nas listas dos dois personagens e fica selecionado no personagem em que você clicou. Não há duplicatas; os modelos adicionados permanecem durante a sessão, inclusive ao reiniciar a conversa. Você pode usar modelos iguais ou diferentes. O catálogo lista modelos com saída de texto; disponibilidade, saldo e compatibilidade dependem da sua conta.
-3. Escreva a mensagem inicial e, se quiser, instruções individuais para os modelos.
+2. Em cada caixa de seleção, escolha um modelo do catálogo. Para inserir outro, clique no botão **+**, digite o identificador exato (por exemplo `openai/gpt-4o-mini`) e clique em **Adicionar modelo**. Ele entra nas listas dos dois modelos e fica selecionado no quadro em que você clicou. Não há duplicatas; os modelos adicionados permanecem durante a sessão, inclusive ao reiniciar a conversa. Você pode usar modelos iguais ou diferentes. O catálogo lista modelos com saída de texto; disponibilidade, saldo e compatibilidade dependem da sua conta.
+3. No campo **Assunto inicial**, escreva a pauta que será enviada ao modelo A. Você pode clicar em **Usar exemplo** e editar o texto. Se quiser, configure instruções individuais nos quadros: por exemplo, A propõe soluções e B faz críticas construtivas.
 4. Escolha o limite total de respostas e clique em **Iniciar conversa**.
 5. A responde primeiro, B recebe a resposta, e os dois alternam com o histórico completo. **Pausar** interrompe a espera local; **Retomar** continua pelo próximo participante. **Reiniciar** limpa as respostas e libera os modelos e a mensagem inicial para edição.
+
+Exemplo: escolha Nemotron no quadro A e um modelo da OpenAI no quadro B (use os identificadores disponíveis na sua conta OpenRouter). No assunto inicial, escreva: “Como a IA pode ajudar pequenos negócios? Proponha uma ideia prática; o outro modelo deve questioná-la e sugerir melhorias.” Clique em **Iniciar conversa**. O modelo do quadro A começa, independentemente do provedor escolhido.
 
 O limite conta respostas individuais: 10 respostas equivalem a 5 de cada modelo. Cada chamada pede no máximo 800 tokens de saída. Há um intervalo de 1,2 segundo entre respostas. Modelos com raciocínio extenso podem consumir o limite antes de produzir texto; nesse caso, escolha outro modelo.
 

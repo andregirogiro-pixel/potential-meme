@@ -8,7 +8,7 @@ const wait = (ms, signal) => new Promise(resolve => {
   if (signal.aborted) finish();
 });
 
-// Each character has a select and a small form for adding an exact model ID.
+// Each model panel has a select and a form for adding an exact model ID.
 function addModelOption(id, name = id) {
   for (const speaker of ['a', 'b']) {
     const select = $(`model-${speaker}`);
@@ -88,7 +88,6 @@ function update(status) {
   $('reset').disabled = !state.session;
   $('start').textContent = state.running ? 'Pausar conversa Ⅱ' : count >= limit ? 'Conversa concluída ✓' : state.session ? 'Retomar conversa →' : 'Iniciar conversa →';
   $('start').disabled = !state.running && count >= limit;
-  document.querySelector('.seed-panel').classList.toggle('has-session', Boolean(state.session));
   for (const id of ['initial', 'model-a', 'model-b', 'instruction-a', 'instruction-b', 'limit']) $(id).disabled = Boolean(state.session);
   for (const speaker of ['a', 'b']) {
     $(`add-model-${speaker}`).disabled = Boolean(state.session);
@@ -138,9 +137,9 @@ async function start() {
   if (!key && !state.hasServerKey) { showError('Informe sua chave do OpenRouter para começar.'); $('api-key').focus(); return; }
   if (!state.session) {
     const initial = $('initial').value.trim();
-    if (!initial) { showError('Escreva uma mensagem para iniciar a conversa.'); $('initial').focus(); return; }
+    if (!initial) { showError('Escreva um assunto inicial para os dois modelos.'); $('initial').focus(); return; }
     const models = { a: $('model-a').value.trim(), b: $('model-b').value.trim() };
-    if (Object.values(models).some(m => !/^[\w./:@-]{1,150}$/.test(m))) { showError('Selecione um modelo para cada personagem. Use o botão + para adicionar um identificador.'); return; }
+    if (Object.values(models).some(m => !/^[\w./:@-]{1,150}$/.test(m))) { showError('Selecione um modelo em cada quadro. Use o botão + para adicionar um identificador.'); return; }
     state.session = { initial, models, instructions: { a: $('instruction-a').value.trim(), b: $('instruction-b').value.trim() }, limit: Number($('limit').value) };
   }
   state.running = true;
