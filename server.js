@@ -8,6 +8,14 @@ const files = new Map([
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
 ]);
 
+export function retryAfterSeconds(value, now = Date.now()) {
+  if (!value) return null;
+  const seconds = /^\d+(\.\d+)?$/.test(value.trim())
+    ? Math.ceil(Number(value))
+    : Math.ceil((Date.parse(value) - now) / 1000);
+  return Number.isFinite(seconds) && seconds >= 0 && seconds <= 604800 ? seconds : null;
+}
+
 export function buildMessages({ initial, history, speaker, instruction }) {
   return [
     { role: 'system', content: instruction || 'Você participa de uma conversa com outro modelo de IA. Responda em português, de forma clara e direta. Desenvolva a conversa a partir da última mensagem, sem simular os outros participantes.' },
@@ -67,7 +75,17 @@ export function createApp({ request = fetch, apiKey = process.env.OPENROUTER_API
             signal: controller.signal,
           });
           if (!upstream.ok) {
-            const messages = { 400: 'O OpenRouter recusou a solicitação. Verifique o identificador e a compatibilidade do modelo.', 401: 'Chave do OpenRouter inválida ou expirada.', 402: 'Saldo insuficiente no OpenRouter.', 403: 'Acesso ao modelo negado pelo OpenRouter.', 404: 'Modelo não encontrado no OpenRouter.', 429: 'Limite de requisições atingido. Aguarde e retome a conversa.' };
+            if (upstream.status === 429) {
+              const seconds = retryAfterSeconds(upstream.headers.get('retry-after'));
+              if (seconds !== null) res.setHeader('Retry-After', String(seconds));
+              return json(429, {
+                error: `O OpenRouter limitou a solicitação ao modelo ${model}. O limite pode ser da conta ou do provedor.${model.endsWith(':free') ? ' Modelos :free também podem ter cotas diárias compartilhadas.' : ''} ${seconds === null ? 'Não foi informado um tempo de espera. Aguarde antes de tentar novamente e consulte os limites da sua conta no OpenRouter.' : 'Aguarde o tempo informado antes de tentar novamente pela seta.'} O histórico e a vez deste modelo foram preservados.`,
+                code: 'OPENROUTER_RATE_LIMIT',
+                model,
+                retryAfterSeconds: seconds,
+              });
+            }
+            const messages = { 400: 'O OpenRouter recusou a solicitação. Verifique o identificador e a compatibilidade do modelo.', 401: 'Chave do OpenRouter inválida ou expirada.', 402: 'Saldo insuficiente no OpenRouter.', 403: 'Acesso ao modelo negado pelo OpenRouter.', 404: 'Modelo não encontrado no OpenRouter.' };
             return json(upstream.status >= 500 ? 502 : (messages[upstream.status] ? upstream.status : 502), { error: messages[upstream.status] || 'O OpenRouter está indisponível. Tente novamente.' });
           }
           const data = await upstream.json();

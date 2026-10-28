@@ -22,6 +22,12 @@ Exemplo: escolha Nemotron no quadro A e um modelo da OpenAI no quadro B (use os 
 
 O limite conta respostas individuais: 10 respostas equivalem a 5 de cada modelo. Cada chamada pede no máximo 800 tokens de saída. O intervalo entre respostas é decidido por você: a próxima só é solicitada ao clicar na seta. Modelos com raciocínio extenso podem consumir o limite antes de produzir texto; nesse caso, escolha outro modelo.
 
+## Limite de requisições do OpenRouter (429)
+
+O erro 429 vem do OpenRouter ou do provedor do modelo, e pode indicar limite temporário ou cota da conta, inclusive de modelos gratuitos. É diferente do limite de respostas escolhido na interface. A aplicação identifica qual modelo foi recusado e preserva o histórico e a vez dele.
+
+Quando o OpenRouter envia `Retry-After`, a seta mostra uma contagem regressiva e fica bloqueada durante a espera. Depois disso, você decide quando tentar novamente; não há repetição automática ou garantia de que a cota estará disponível. Sem esse cabeçalho, não inventamos um prazo. Consulte os limites/créditos e a atividade da sua conta no OpenRouter; para trocar de modelo, reinicie a conversa e selecione outro. Trocar entre modelos gratuitos pode não resolver uma cota compartilhada da conta.
+
 ## Chave e privacidade
 
 A chave digitada fica apenas na memória da página e passa pelo servidor local para autenticar a chamada HTTPS ao OpenRouter. Não usamos armazenamento do navegador, banco de dados ou logs de mensagens/chaves. Recarregar a página apaga a conversa e a chave digitada. O OpenRouter e o provedor do modelo recebem as mensagens conforme suas próprias políticas.

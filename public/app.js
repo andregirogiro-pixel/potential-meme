@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const state = { history: [], running: false, controller: null, session: null, hasServerKey: false, generation: 0 };
+const state = { history: [], running: false, controller: null, session: null, hasServerKey: false, generation: 0, cooldownUntil: 0, cooldownTimer: null };
 const empties = { a: $('messages-a').innerHTML, b: $('messages-b').innerHTML };
 // Each model panel has a select and a form for adding an exact model ID.
 function addModelOption(id, name = id) {
@@ -72,6 +72,19 @@ fetch('/api/config').then(r => r.json()).then(data => {
 }).catch(() => {});
 
 function showError(message = '') { $('error').textContent = message; $('error').hidden = !message; }
+function beginCooldown(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 604800) return;
+  state.cooldownUntil = Date.now() + seconds * 1000;
+  clearInterval(state.cooldownTimer);
+  state.cooldownTimer = setInterval(() => {
+    if (Date.now() >= state.cooldownUntil) {
+      clearInterval(state.cooldownTimer);
+      state.cooldownTimer = null;
+      state.cooldownUntil = 0;
+      update('Tempo de espera informado concluído. Clique na seta para tentar novamente.');
+    } else update();
+  }, 250);
+}
 function update(status) {
   const count = state.history.length;
   const limit = state.session?.limit ?? Number($('limit').value);
@@ -81,7 +94,13 @@ function update(status) {
   $('reset').disabled = !state.session;
   const next = count % 2 === 0 ? 'A' : 'B';
   $('start').textContent = state.running ? `Modelo ${next} respondendo…` : count >= limit ? 'Limite atingido ✓' : count === 0 ? 'Enviar ao modelo A →' : `Modelo ${next} responde →`;
-  $('start').disabled = state.running || count >= limit;
+  const wait = Math.max(0, Math.ceil((state.cooldownUntil - Date.now()) / 1000));
+  if (wait > 0 && !state.running) {
+    const time = `${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, '0')}`;
+    $('start').textContent = `Aguarde ${time}`;
+    $('status').textContent = 'O OpenRouter pediu uma espera. A próxima tentativa depende do seu clique.';
+  }
+  $('start').disabled = state.running || count >= limit || wait > 0;
   $('start').setAttribute('aria-busy', String(state.running));
   $('cancel-response').hidden = !state.running;
   for (const id of ['initial', 'model-a', 'model-b', 'instruction-a', 'instruction-b', 'limit']) $(id).disabled = Boolean(state.session);
@@ -127,7 +146,7 @@ function cancelResponse() {
   update('Solicitação cancelada. Clique na seta para tentar novamente.');
 }
 async function start() {
-  if (state.running || (state.session && state.history.length >= state.session.limit)) return;
+  if (state.running || Date.now() < state.cooldownUntil || (state.session && state.history.length >= state.session.limit)) return;
   showError();
   const key = $('api-key').value.trim();
   if (!key && !state.hasServerKey) { showError('Informe sua chave do OpenRouter para começar.'); $('api-key').focus(); return; }
@@ -154,7 +173,11 @@ async function start() {
       body: JSON.stringify({ apiKey: key || undefined, model: state.session.models[speaker], initial: state.session.initial, history: state.history.map(({ speaker, content }) => ({ speaker, content })), speaker, instruction: state.session.instructions[speaker] }),
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Não foi possível obter a resposta.');
+    if (generation !== state.generation) return;
+    if (!response.ok) {
+      if (response.status === 429) beginCooldown(data.retryAfterSeconds);
+      throw new Error(data.error || 'Não foi possível obter a resposta.');
+    }
     if (generation !== state.generation) return;
     if (typeof data.content !== 'string' || !data.content.trim()) throw new Error('O modelo retornou uma resposta vazia.');
     const turn = { speaker, content: data.content };

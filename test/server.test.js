@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createApp, buildMessages } from '../server.js';
+import { createApp, buildMessages, retryAfterSeconds } from '../server.js';
 
 async function app(t, options) {
   const server = createApp({ apiKey: '', ...options });
@@ -59,6 +59,39 @@ test('erros do provedor são compreensíveis e não vazam o corpo remoto', async
   const response = await post(seed);
   assert.equal(response.status, 402);
   assert.deepEqual(await response.json(), { error: 'Saldo insuficiente no OpenRouter.' });
+});
+test('Retry-After aceita segundos e data HTTP sem inventar espera para valores inválidos', () => {
+  const now = Date.UTC(2026, 9, 28, 12);
+  assert.equal(retryAfterSeconds('60', now), 60);
+  assert.equal(retryAfterSeconds('0.5', now), 1);
+  assert.equal(retryAfterSeconds('Wed, 28 Oct 2026 12:01:00 GMT', now), 60);
+  for (const value of [null, '', 'inválido', '-1', '999999999999', 'Wed, 28 Oct 2026 11:00:00 GMT']) assert.equal(retryAfterSeconds(value, now), null);
+});
+test('429 identifica o modelo e preserva a espera informada sem vazar dados remotos', async t => {
+  let calls = 0;
+  const { post } = await app(t, { request: async () => {
+    calls++;
+    return new Response('secret upstream detail', { status: 429, headers: { 'Retry-After': '45' } });
+  } });
+  const response = await post({ ...seed, model: 'test/model:free' });
+  const data = await response.json();
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after'), '45');
+  assert.equal(data.code, 'OPENROUTER_RATE_LIMIT');
+  assert.equal(data.model, 'test/model:free');
+  assert.equal(data.retryAfterSeconds, 45);
+  assert.match(data.error, /cotas diárias compartilhadas/);
+  assert.match(data.error, /histórico e a vez/);
+  assert.doesNotMatch(JSON.stringify(data), /secret upstream detail|test-key/);
+  assert.equal(calls, 1);
+});
+test('429 sem Retry-After informa que a duração é desconhecida', async t => {
+  const { post } = await app(t, { request: async () => new Response('', { status: 429 }) });
+  const response = await post(seed);
+  const data = await response.json();
+  assert.equal(data.retryAfterSeconds, null);
+  assert.equal(response.headers.get('retry-after'), null);
+  assert.match(data.error, /Não foi informado um tempo/);
 });
 test('resposta vazia é tratada como falha recuperável', async t => {
   const { post } = await app(t, { request: async () => Response.json({ choices: [{ message: { content: null } }] }) });
