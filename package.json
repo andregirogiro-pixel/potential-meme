@@ -1,0 +1,9 @@
+{
+  "name": "entre-modelos",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Uma conversa entre você e dois modelos via OpenRouter.",
+  "engines": { "node": ">=24" },
+  "scripts": { "start": "node --use-env-proxy server.js", "dev": "node --use-env-proxy --watch server.js", "test": "node --test" }
+}
