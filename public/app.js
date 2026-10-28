@@ -1,13 +1,6 @@
 const $ = id => document.getElementById(id);
 const state = { history: [], running: false, controller: null, session: null, hasServerKey: false, generation: 0 };
 const empties = { a: $('messages-a').innerHTML, b: $('messages-b').innerHTML };
-const wait = (ms, signal) => new Promise(resolve => {
-  const finish = () => { clearTimeout(timer); signal.removeEventListener('abort', finish); resolve(); };
-  const timer = setTimeout(finish, ms);
-  signal.addEventListener('abort', finish, { once: true });
-  if (signal.aborted) finish();
-});
-
 // Each model panel has a select and a form for adding an exact model ID.
 function addModelOption(id, name = id) {
   for (const speaker of ['a', 'b']) {
@@ -86,8 +79,11 @@ function update(status) {
   if (status) $('status').textContent = status;
   $('status-dot').classList.toggle('active', state.running);
   $('reset').disabled = !state.session;
-  $('start').textContent = state.running ? 'Pausar conversa Ⅱ' : count >= limit ? 'Conversa concluída ✓' : state.session ? 'Retomar conversa →' : 'Iniciar conversa →';
-  $('start').disabled = !state.running && count >= limit;
+  const next = count % 2 === 0 ? 'A' : 'B';
+  $('start').textContent = state.running ? `Modelo ${next} respondendo…` : count >= limit ? 'Limite atingido ✓' : count === 0 ? 'Enviar ao modelo A →' : `Modelo ${next} responde →`;
+  $('start').disabled = state.running || count >= limit;
+  $('start').setAttribute('aria-busy', String(state.running));
+  $('cancel-response').hidden = !state.running;
   for (const id of ['initial', 'model-a', 'model-b', 'instruction-a', 'instruction-b', 'limit']) $(id).disabled = Boolean(state.session);
   for (const speaker of ['a', 'b']) {
     $(`add-model-${speaker}`).disabled = Boolean(state.session);
@@ -96,7 +92,7 @@ function update(status) {
       $(`add-model-${speaker}`).setAttribute('aria-expanded', 'false');
     }
   }
-  // A key can be corrected while paused without discarding the conversation.
+  // The key can be corrected between turns without discarding the conversation.
   $('api-key').disabled = state.running;
   for (const button of document.querySelectorAll('.suggestion')) button.disabled = Boolean(state.session);
 }
@@ -122,16 +118,16 @@ function renderTurn(turn) {
   container.append(article);
   container.scrollTop = container.scrollHeight;
 }
-function pause() {
+function cancelResponse() {
   state.running = false;
   state.generation++;
   state.controller?.abort();
-  footer('a', 'Conversa pausada');
-  footer('b', 'Conversa pausada');
-  update('Pausada. Continue quando quiser.');
+  footer('a', 'Aguardando seu próximo envio');
+  footer('b', 'Aguardando seu próximo envio');
+  update('Solicitação cancelada. Clique na seta para tentar novamente.');
 }
 async function start() {
-  if (state.running) return pause();
+  if (state.running || (state.session && state.history.length >= state.session.limit)) return;
   showError();
   const key = $('api-key').value.trim();
   if (!key && !state.hasServerKey) { showError('Informe sua chave do OpenRouter para começar.'); $('api-key').focus(); return; }
@@ -146,46 +142,48 @@ async function start() {
   const generation = ++state.generation;
   const controller = new AbortController();
   state.controller = controller;
-  update();
+  const speaker = state.history.length % 2 === 0 ? 'a' : 'b';
+  const other = speaker === 'a' ? 'b' : 'a';
+  footer(speaker, 'Preparando uma resposta…', true);
+  footer(other, `Aguardando o modelo ${speaker.toUpperCase()}`);
+  update(`Modelo ${speaker.toUpperCase()} está respondendo…`);
   try {
-    while (state.running && generation === state.generation && state.history.length < state.session.limit) {
-      const speaker = state.history.length % 2 === 0 ? 'a' : 'b';
-      const other = speaker === 'a' ? 'b' : 'a';
-      footer(speaker, 'Preparando uma resposta…', true);
-      footer(other, `Aguardando o modelo ${speaker.toUpperCase()}`);
-      update(`Modelo ${speaker.toUpperCase()} está respondendo…`);
-      const response = await fetch('/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
-        body: JSON.stringify({ apiKey: key || undefined, model: state.session.models[speaker], initial: state.session.initial, history: state.history.map(({ speaker, content }) => ({ speaker, content })), speaker, instruction: state.session.instructions[speaker] }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Não foi possível obter a resposta.');
-      if (!state.running || generation !== state.generation) return;
-      if (typeof data.content !== 'string' || !data.content.trim()) throw new Error('O modelo retornou uma resposta vazia.');
-      const turn = { speaker, content: data.content };
-      state.history.push(turn);
-      renderTurn(turn);
-      footer(speaker, 'Resposta recebida');
-      update('Passando a palavra…');
-      if (state.history.length < state.session.limit) await wait(1200, controller.signal);
-    }
+    // A single click makes exactly one request. The next turn waits for another click.
+    const response = await fetch('/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+      body: JSON.stringify({ apiKey: key || undefined, model: state.session.models[speaker], initial: state.session.initial, history: state.history.map(({ speaker, content }) => ({ speaker, content })), speaker, instruction: state.session.instructions[speaker] }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Não foi possível obter a resposta.');
     if (generation !== state.generation) return;
+    if (typeof data.content !== 'string' || !data.content.trim()) throw new Error('O modelo retornou uma resposta vazia.');
+    const turn = { speaker, content: data.content };
+    state.history.push(turn);
+    renderTurn(turn);
     state.running = false;
-    footer('a', 'Conversa concluída');
-    footer('b', 'Conversa concluída');
-    update('Limite atingido. Uma boa hora para refletir.');
+    footer(speaker, 'Resposta recebida');
+    if (state.history.length >= state.session.limit) {
+      footer(other, 'Limite de respostas atingido');
+      update('Limite atingido. Reinicie para uma nova conversa.');
+    } else {
+      footer(other, 'Clique na seta para eu responder');
+      update(`Sua vez de avançar: clique na seta para o modelo ${other.toUpperCase()} responder.`);
+    }
   } catch (error) {
     if (generation !== state.generation) return;
     state.running = false;
-    footer('a', 'Conversa pausada');
-    footer('b', 'Conversa pausada');
-    update('Conversa pausada. Você pode tentar novamente.');
+    footer(speaker, 'Clique na seta para tentar novamente');
+    footer(other, `Aguardando o modelo ${speaker.toUpperCase()}`);
+    update(`Não foi possível obter a resposta do modelo ${speaker.toUpperCase()}. Tente novamente pela seta.`);
     showError(error.name === 'AbortError' ? 'Solicitação cancelada.' : error.message);
+  } finally {
+    if (generation === state.generation) state.controller = null;
   }
 }
 $('start').addEventListener('click', start);
+$('cancel-response').addEventListener('click', cancelResponse);
 $('reset').addEventListener('click', () => {
-  if (state.running) pause();
+  if (state.running) cancelResponse();
   state.generation++;
   state.history = [];
   state.session = null;
