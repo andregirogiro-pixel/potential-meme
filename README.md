@@ -13,7 +13,7 @@ npm start
 O servidor usa a porta 3000 (configurável por `PORT`). Para desenvolvimento com reinício automático, execute `npm run dev`.
 
 1. Informe sua chave do OpenRouter no campo da página.
-2. Em cada seletor, busque um modelo do catálogo ou cole seu identificador exato, por exemplo `openai/gpt-4o-mini`. Você pode usar modelos iguais ou diferentes. O catálogo lista modelos com saída de texto; disponibilidade, saldo e compatibilidade dependem da sua conta.
+2. Em cada caixa de seleção, escolha um modelo do catálogo. Para inserir outro, clique no botão **+**, digite o identificador exato (por exemplo `openai/gpt-4o-mini`) e clique em **Adicionar modelo**. Ele entra nas listas dos dois personagens e fica selecionado no personagem em que você clicou. Não há duplicatas; os modelos adicionados permanecem durante a sessão, inclusive ao reiniciar a conversa. Você pode usar modelos iguais ou diferentes. O catálogo lista modelos com saída de texto; disponibilidade, saldo e compatibilidade dependem da sua conta.
 3. Escreva a mensagem inicial e, se quiser, instruções individuais para os modelos.
 4. Escolha o limite total de respostas e clique em **Iniciar conversa**.
 5. A responde primeiro, B recebe a resposta, e os dois alternam com o histórico completo. **Pausar** interrompe a espera local; **Retomar** continua pelo próximo participante. **Reiniciar** limpa as respostas e libera os modelos e a mensagem inicial para edição.

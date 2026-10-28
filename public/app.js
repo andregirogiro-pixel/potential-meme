@@ -8,31 +8,68 @@ const wait = (ms, signal) => new Promise(resolve => {
   if (signal.aborted) finish();
 });
 
-// A datalist allows both a searchable catalog and an exact, manually entered ID.
-const list = document.createElement('datalist');
-list.id = 'openrouter-models';
-document.body.append(list);
+// Each character has a select and a small form for adding an exact model ID.
+function addModelOption(id, name = id) {
+  for (const speaker of ['a', 'b']) {
+    const select = $(`model-${speaker}`);
+    if (![...select.options].some(option => option.value === id)) {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = name === id ? id : `${name} · ${id}`;
+      select.append(option);
+    }
+  }
+}
 for (const speaker of ['a', 'b']) {
-  const input = $(`model-${speaker}`);
-  input.setAttribute('list', list.id);
-  input.setAttribute('autocomplete', 'off');
-  input.placeholder = 'Busque ou cole o ID do modelo';
+  const form = $(`model-form-${speaker}`);
+  const input = $(`new-model-${speaker}`);
+  const toggle = $(`add-model-${speaker}`);
+  const error = $(`model-error-${speaker}`);
+  function closeForm() {
+    form.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+    error.hidden = true;
+    input.removeAttribute('aria-invalid');
+    toggle.focus();
+  }
+  toggle.addEventListener('click', () => {
+    form.hidden = !form.hidden;
+    toggle.setAttribute('aria-expanded', String(!form.hidden));
+    if (!form.hidden) input.focus();
+  });
+  $(`cancel-model-${speaker}`).addEventListener('click', closeForm);
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); closeForm(); }
+  });
+  input.addEventListener('input', () => { error.hidden = true; input.removeAttribute('aria-invalid'); });
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (state.session) return;
+    const id = input.value.trim();
+    if (!/^[\w./:@-]{1,150}$/.test(id)) {
+      error.textContent = 'Use o identificador do modelo, sem espaços. Ex.: openai/gpt-4o-mini';
+      error.hidden = false;
+      input.setAttribute('aria-invalid', 'true');
+      input.focus();
+      return;
+    }
+    addModelOption(id);
+    $(`model-${speaker}`).value = id;
+    input.value = '';
+    closeForm();
+    $(`model-${speaker}`).focus();
+  });
 }
 const catalogStatus = document.createElement('p');
 catalogStatus.className = 'catalog-status';
-catalogStatus.textContent = 'Carregando o catálogo de modelos…';
+catalogStatus.textContent = 'Carregando o catálogo de modelos… Você também pode adicionar pelo botão +.';
 document.querySelector('.settings').after(catalogStatus);
 fetch('/api/models').then(async response => {
   const data = await response.json();
   if (!response.ok) throw new Error(data.error);
-  for (const model of data.models) {
-    const option = document.createElement('option');
-    option.value = model.id;
-    option.label = model.name;
-    list.append(option);
-  }
-  catalogStatus.textContent = `${data.models.length} modelos disponíveis. Busque pelo nome ou cole o identificador nos seletores abaixo.`;
-}).catch(() => { catalogStatus.textContent = 'Catálogo indisponível. Você ainda pode colar o identificador de qualquer modelo de texto do OpenRouter.'; });
+  for (const model of data.models) addModelOption(model.id, model.name);
+  catalogStatus.textContent = `${data.models.length} modelos disponíveis. Escolha na lista ou use + para adicionar um identificador.`;
+}).catch(() => { catalogStatus.textContent = 'Catálogo indisponível. Use o botão + para adicionar seus modelos do OpenRouter.'; });
 fetch('/api/config').then(r => r.json()).then(data => {
   state.hasServerKey = data.hasServerKey;
   if (data.hasServerKey) {
@@ -53,6 +90,13 @@ function update(status) {
   $('start').disabled = !state.running && count >= limit;
   document.querySelector('.seed-panel').classList.toggle('has-session', Boolean(state.session));
   for (const id of ['initial', 'model-a', 'model-b', 'instruction-a', 'instruction-b', 'limit']) $(id).disabled = Boolean(state.session);
+  for (const speaker of ['a', 'b']) {
+    $(`add-model-${speaker}`).disabled = Boolean(state.session);
+    if (state.session) {
+      $(`model-form-${speaker}`).hidden = true;
+      $(`add-model-${speaker}`).setAttribute('aria-expanded', 'false');
+    }
+  }
   // A key can be corrected while paused without discarding the conversation.
   $('api-key').disabled = state.running;
   for (const button of document.querySelectorAll('.suggestion')) button.disabled = Boolean(state.session);
@@ -96,7 +140,7 @@ async function start() {
     const initial = $('initial').value.trim();
     if (!initial) { showError('Escreva uma mensagem para iniciar a conversa.'); $('initial').focus(); return; }
     const models = { a: $('model-a').value.trim(), b: $('model-b').value.trim() };
-    if (Object.values(models).some(m => !/^[\w./:@-]{1,150}$/.test(m))) { showError('Selecione ou cole um identificador de modelo válido para cada participante.'); return; }
+    if (Object.values(models).some(m => !/^[\w./:@-]{1,150}$/.test(m))) { showError('Selecione um modelo para cada personagem. Use o botão + para adicionar um identificador.'); return; }
     state.session = { initial, models, instructions: { a: $('instruction-a').value.trim(), b: $('instruction-b').value.trim() }, limit: Number($('limit').value) };
   }
   state.running = true;
